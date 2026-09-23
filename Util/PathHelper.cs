@@ -65,5 +65,54 @@ namespace BrewLib.Util
                         return false;
             return true;
         }
+
+        /// <summary>
+        /// Returns the path of the existing file matching this path while ignoring case and treating backslashes as separators,
+        /// since osu! and beatmaps made on Windows rely on both.
+        /// Returns the path unchanged if there is no such file, or on Windows.
+        /// </summary>
+        public static string FindFileIgnoringCase(string path)
+        {
+            if (OperatingSystem.IsWindows() || string.IsNullOrEmpty(path))
+                return path;
+
+            var platformPath = WithPlatformSeparators(path);
+            if (File.Exists(platformPath))
+                return platformPath;
+
+            try
+            {
+                var fullPath = Path.GetFullPath(platformPath);
+                var root = Path.GetPathRoot(fullPath);
+
+                var current = root;
+                foreach (var part in fullPath.Substring(root.Length).Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var next = Path.Combine(current, part);
+                    if (!Directory.Exists(next) && !File.Exists(next))
+                    {
+                        next = null;
+                        foreach (var entry in Directory.EnumerateFileSystemEntries(current))
+                            if (string.Equals(Path.GetFileName(entry), part, StringComparison.OrdinalIgnoreCase))
+                            {
+                                next = entry;
+                                break;
+                            }
+                        if (next == null)
+                            return path;
+                    }
+                    current = next;
+                }
+                return File.Exists(current) ? current : path;
+            }
+            catch (IOException)
+            {
+                return path;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return path;
+            }
+        }
     }
 }

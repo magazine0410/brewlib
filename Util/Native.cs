@@ -8,8 +8,8 @@ namespace BrewLib.Util
 {
     public static class Native
     {
-        [DllImport("msvcrt.dll", EntryPoint = "memcpy", CallingConvention = CallingConvention.Cdecl, SetLastError = false)]
-        public static extern void memcpy(IntPtr dest, IntPtr src, uint count);
+        public static unsafe void memcpy(IntPtr dest, IntPtr src, uint count)
+            => Buffer.MemoryCopy((void*)src, (void*)dest, count, count);
 
         [DllImport("user32.dll")]
         public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
@@ -50,19 +50,22 @@ namespace BrewLib.Util
 
         public static IntPtr FindProcessWindow(string title)
         {
+            if (!OperatingSystem.IsWindows())
+                return IntPtr.Zero;
+
             foreach (var hWnd in EnumerateProcessWindowHandles(Process.GetCurrentProcess()))
                 if (GetWindowText(hWnd) == title)
                     return hWnd;
             return IntPtr.Zero;
         }
 
-        [DllImport("msvcrt.dll", EntryPoint = "memset", CallingConvention = CallingConvention.Cdecl, SetLastError = false)]
-        public static extern IntPtr MemSet(IntPtr dest, int value, int count);
-
-        [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
-        public static extern int memcmp(byte[] b1, byte[] b2, long count);
+        public static unsafe IntPtr MemSet(IntPtr dest, int value, int count)
+        {
+            new Span<byte>((void*)dest, count).Fill((byte)value);
+            return dest;
+        }
 
         public static bool ArrayEquals(byte[] b1, byte[] b2)
-            => b1.Length == b2.Length && memcmp(b1, b2, b1.Length) == 0;
+            => b1.AsSpan().SequenceEqual(b2);
     }
 }

@@ -27,7 +27,7 @@ namespace BrewLib.Audio
             filename = PathHelper.WithStandardSeparators(filename);
             if (!samples.TryGetValue(filename, out AudioSample sample))
             {
-                sample = audioManager.LoadSample(filename, resourceContainer);
+                sample = audioManager.LoadSample(PathHelper.FindFileIgnoringCase(filename), resourceContainer);
                 samples.Add(filename, sample);
             }
             return sample;

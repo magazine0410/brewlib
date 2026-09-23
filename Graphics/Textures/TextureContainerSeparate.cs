@@ -40,7 +40,7 @@ namespace BrewLib.Graphics.Textures
             filename = PathHelper.WithStandardSeparators(filename);
             if (!textures.TryGetValue(filename, out Texture2d texture))
             {
-                texture = Texture2d.Load(filename, resourceContainer, textureOptions);
+                texture = Texture2d.Load(PathHelper.FindFileIgnoringCase(filename), resourceContainer, textureOptions);
                 textures.Add(filename, texture);
                 ResourceLoaded?.Invoke(filename, texture);
             }
