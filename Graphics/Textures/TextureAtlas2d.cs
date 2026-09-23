@@ -1,7 +1,7 @@
 ﻿using OpenTK;
 using OpenTK.Graphics;
+using SkiaSharp;
 using System;
-using System.Drawing;
 
 namespace BrewLib.Graphics.Textures
 {
@@ -27,7 +27,7 @@ namespace BrewLib.Graphics.Textures
         /// <summary>
         /// Adds a bitmap to the atlas, return the new region or null if there isn't enough space
         /// </summary>
-        public Texture2dRegion AddRegion(Bitmap bitmap, string description)
+        public Texture2dRegion AddRegion(SKBitmap bitmap, string description)
         {
             if (currentY + bitmap.Height > texture.Height) return null;
             if (currentX + bitmap.Width > texture.Width)

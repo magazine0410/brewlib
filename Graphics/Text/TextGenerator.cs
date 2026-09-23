@@ -1,15 +1,10 @@
 ﻿using BrewLib.Data;
-using BrewLib.Graphics.Textures;
-using BrewLib.Util;
 using OpenTK;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Drawing.Imaging;
-using System.Drawing.Text;
-using System.Runtime.InteropServices;
+using System.Linq;
 
 namespace BrewLib.Graphics.Text
 {
@@ -18,12 +13,10 @@ namespace BrewLib.Graphics.Text
         private const bool debugFont = false;
         private static int debugSeed = 0;
 
-        private SolidBrush textBrush = new SolidBrush(Color.FromArgb(255, 255, 255, 255));
-        private SolidBrush shadowBrush = new SolidBrush(Color.FromArgb(220, 0, 0, 0));
-        private Dictionary<string, Font> fonts = new Dictionary<string, Font>();
-        private Dictionary<string, FontFamily> fontFamilies = new Dictionary<string, FontFamily>();
-        private Dictionary<string, PrivateFontCollection> fontCollections = new Dictionary<string, PrivateFontCollection>();
-        private LinkedList<string> recentlyUsedFonts = new LinkedList<string>();
+        private static readonly SKColor textColor = new SKColor(255, 255, 255, 255);
+        private static readonly SKColor shadowColor = new SKColor(0, 0, 0, 220);
+
+        private Dictionary<string, SKTypeface> typefaces = new Dictionary<string, SKTypeface>();
 
         private ResourceContainer resourceContainer;
 
@@ -32,65 +25,48 @@ namespace BrewLib.Graphics.Text
             this.resourceContainer = resourceContainer;
         }
 
-        public Bitmap CreateBitmap(string text, string fontName, float fontSize, Vector2 maxSize, Vector2 padding, BoxAlignment alignment, StringTrimming trimming, out Vector2 textureSize, bool measureOnly)
+        /// <summary>
+        /// Renders white text with a shadow, one line per line of text, horizontally centered.
+        /// Returns null when only measuring.
+        /// </summary>
+        public SKBitmap CreateBitmap(string text, string fontName, float fontSize, Vector2 padding, out Vector2 textureSize, bool measureOnly)
         {
             if (string.IsNullOrEmpty(text)) text = " ";
 
-            StringAlignment horizontalAlignment;
-            switch (alignment & BoxAlignment.Horizontal)
+            using (var font = SkiaText.CreateFont(getTypeface(fontName), fontSize))
             {
-                case BoxAlignment.Left: horizontalAlignment = StringAlignment.Near; break;
-                case BoxAlignment.Right: horizontalAlignment = StringAlignment.Far; break;
-                default: horizontalAlignment = StringAlignment.Center; break;
-            }
+                var lines = text.Split('\n');
+                var lineWidths = lines.Select(line => SkiaText.Measure(font, line)).ToArray();
+                var textWidth = lineWidths.Max();
 
-            StringAlignment verticalAlignment;
-            switch (alignment & BoxAlignment.Vertical)
-            {
-                case BoxAlignment.Top: verticalAlignment = StringAlignment.Near; break;
-                case BoxAlignment.Bottom: verticalAlignment = StringAlignment.Far; break;
-                default: verticalAlignment = StringAlignment.Center; break;
-            }
-
-            using (System.Drawing.Graphics graphics = System.Drawing.Graphics.FromHwnd(IntPtr.Zero))
-            using (StringFormat stringFormat = new StringFormat(StringFormat.GenericTypographic))
-            {
-                graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
-                stringFormat.Alignment = horizontalAlignment;
-                stringFormat.LineAlignment = verticalAlignment;
-                stringFormat.Trimming = trimming;
-                stringFormat.FormatFlags = StringFormatFlags.FitBlackBox | StringFormatFlags.MeasureTrailingSpaces | StringFormatFlags.NoClip; // | StringFormatFlags.LineLimit
-
-                var dpiScale = 96f / graphics.DpiY;
-                var font = getFont(fontName, fontSize * dpiScale, FontStyle.Regular);
-
-                var measuredSize = graphics.MeasureString(text, font, new SizeF(maxSize.X, maxSize.Y), stringFormat);
-                var width = (int)(measuredSize.Width + padding.X * 2 + 1);
-                var height = (int)(measuredSize.Height + padding.Y * 2 + 1);
-
-                var offsetX = padding.X;
-                var offsetY = padding.Y;
+                var width = (int)(textWidth + padding.X * 2 + 1);
+                var height = (int)(font.Spacing * lines.Length + padding.Y * 2 + 1);
 
                 textureSize = new Vector2(width, height);
                 if (measureOnly) return null;
 
-                var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+                var bitmap = new SKBitmap(new SKImageInfo(width, height, SKColorType.Bgra8888, SKAlphaType.Premul));
                 try
                 {
-                    using (System.Drawing.Graphics textGraphics = System.Drawing.Graphics.FromImage(bitmap))
+                    using (var canvas = new SKCanvas(bitmap))
+                    using (var shadowPaint = new SKPaint() { Color = shadowColor, IsAntialias = true })
+                    using (var textPaint = new SKPaint() { Color = textColor, IsAntialias = true })
                     {
-                        textGraphics.TextRenderingHint = graphics.TextRenderingHint;
-                        textGraphics.SmoothingMode = SmoothingMode.HighQuality;
-                        textGraphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-
                         if (debugFont)
                         {
                             var r = new Random(debugSeed++);
-                            textGraphics.Clear(Color.FromArgb(r.Next(100, 255), r.Next(100, 255), r.Next(100, 255)));
+                            canvas.Clear(new SKColor((byte)r.Next(100, 255), (byte)r.Next(100, 255), (byte)r.Next(100, 255)));
                         }
+                        else canvas.Clear(SKColors.Transparent);
 
-                        textGraphics.DrawString(text, font, shadowBrush, new RectangleF(offsetX + 1, offsetY + 1, width, height), stringFormat);
-                        textGraphics.DrawString(text, font, textBrush, new RectangleF(offsetX, offsetY, width, height), stringFormat);
+                        var baseline = padding.Y - font.Metrics.Ascent;
+                        for (var i = 0; i < lines.Length; i++)
+                        {
+                            var x = padding.X + (textWidth - lineWidths[i]) * 0.5f;
+                            SkiaText.Draw(canvas, font, lines[i], x + 1, baseline + 1, shadowPaint);
+                            SkiaText.Draw(canvas, font, lines[i], x, baseline, textPaint);
+                            baseline += font.Spacing;
+                        }
                     }
                 }
                 catch (Exception)
@@ -102,77 +78,30 @@ namespace BrewLib.Graphics.Text
             }
         }
 
-        public Texture2d CreateTexture(string text, string fontName, float fontSize, Vector2 maxSize, Vector2 padding, BoxAlignment alignment, StringTrimming trimming, out Vector2 textureSize)
+        private SKTypeface getTypeface(string name)
         {
-            using (var bitmap = CreateBitmap(text, fontName, fontSize, maxSize, padding, alignment, trimming, out textureSize, false))
-                return Texture2d.Load(bitmap, $"text:{text}@{fontName}:{fontSize}");
-        }
+            if (typefaces.TryGetValue(name, out SKTypeface typeface))
+                return typeface;
 
-        private Font getFont(string name, float emSize, FontStyle style)
-        {
-            var identifier = $"{name}|{emSize}|{(int)style}";
-
-            if (fonts.TryGetValue(identifier, out Font font))
+            var bytes = resourceContainer.GetBytes(name, ResourceSource.Embedded);
+            if (bytes != null)
             {
-                recentlyUsedFonts.Remove(identifier);
-                recentlyUsedFonts.AddFirst(identifier);
-                return font;
-            }
-            else recentlyUsedFonts.AddFirst(identifier);
+                using (var data = SKData.CreateCopy(bytes))
+                    typeface = SKTypeface.FromData(data);
 
-            if (recentlyUsedFonts.Count > 64)
-                while (recentlyUsedFonts.Count > 32)
-                {
-                    var lastFontIdentifier = recentlyUsedFonts.Last.Value;
-                    recentlyUsedFonts.RemoveLast();
-
-                    fonts[lastFontIdentifier].Dispose();
-                    fonts.Remove(lastFontIdentifier);
-                }
-
-            if (!fontFamilies.TryGetValue(name, out FontFamily fontFamily))
-            {
-                var bytes = resourceContainer.GetBytes(name, ResourceSource.Embedded);
-                if (bytes != null)
-                {
-                    GCHandle pinnedArray = GCHandle.Alloc(bytes, GCHandleType.Pinned);
-                    try
-                    {
-                        if (!fontCollections.TryGetValue(name, out PrivateFontCollection fontCollection))
-                            fontCollections.Add(name, fontCollection = new PrivateFontCollection());
-
-                        IntPtr ptr = pinnedArray.AddrOfPinnedObject();
-                        fontCollection.AddMemoryFont(ptr, bytes.Length);
-
-                        if (fontCollection.Families.Length == 1)
-                        {
-                            fontFamily = fontCollection.Families[0];
-                            Trace.WriteLine($"Loaded font {fontFamily.Name} for {name}");
-                        }
-                        else Trace.WriteLine($"Failed to load font {name}: Expected one family, got {fontCollection.Families.Length}");
-                    }
-                    catch (Exception e)
-                    {
-                        Trace.WriteLine($"Failed to load font {name}: {e.Message}");
-                    }
-                    finally
-                    {
-                        pinnedArray.Free();
-                    }
-                }
-                fontFamilies.Add(name, fontFamily);
+                if (typeface != null)
+                    Trace.WriteLine($"Loaded font {typeface.FamilyName} for {name}");
+                else Trace.WriteLine($"Failed to load font {name}");
             }
 
-            if (fontFamily != null)
-                font = new Font(fontFamily, emSize, style);
-            else
+            if (typeface == null)
             {
-                font = new Font(name, emSize, style);
-                Trace.WriteLine($"Using font system font for {name}");
+                typeface = SKTypeface.FromFamilyName(name);
+                Trace.WriteLine($"Using system font {typeface.FamilyName} for {name}");
             }
 
-            fonts.Add(identifier, font);
-            return font;
+            typefaces.Add(name, typeface);
+            return typeface;
         }
 
         #region IDisposable Support
@@ -184,18 +113,10 @@ namespace BrewLib.Graphics.Text
             {
                 if (disposing)
                 {
-                    textBrush.Dispose();
-                    shadowBrush.Dispose();
-                    foreach (var entry in fonts)
-                        entry.Value.Dispose();
-                    foreach (var fontCollection in fontCollections.Values)
-                        fontCollection.Dispose();
+                    foreach (var typeface in typefaces.Values)
+                        typeface.Dispose();
                 }
-                textBrush = null;
-                shadowBrush = null;
-                fonts = null;
-                fontCollections = null;
-                fontFamilies = null;
+                typefaces = null;
 
                 disposedValue = true;
             }

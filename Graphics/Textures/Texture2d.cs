@@ -3,10 +3,9 @@ using BrewLib.Util;
 using OpenTK;
 using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
+using SkiaSharp;
 using System;
 using System.Diagnostics;
-using System.Drawing;
-using System.Drawing.Imaging;
 using System.IO;
 
 namespace BrewLib.Graphics.Textures
@@ -30,7 +29,7 @@ namespace BrewLib.Graphics.Textures
             this.textureId = textureId;
         }
 
-        public override void Update(Bitmap bitmap, int x, int y, TextureOptions textureOptions)
+        public override void Update(SKBitmap bitmap, int x, int y, TextureOptions textureOptions)
         {
             if (bitmap.Width < 1 || bitmap.Height < 1)
                 throw new InvalidOperationException($"Invalid bitmap size: {bitmap.Width}x{bitmap.Height}");
@@ -41,12 +40,10 @@ namespace BrewLib.Graphics.Textures
             DrawState.BindPrimaryTexture(textureId, TexturingModes.Texturing2d);
 
             textureOptions = textureOptions ?? TextureOptions.Default;
-            textureOptions.WithBitmap(bitmap, b =>
+            textureOptions.WithPixels(bitmap, bitmap.Width, bitmap.Height, pixels =>
             {
-                var bitmapData = b.LockBits(new Rectangle(0, 0, b.Width, b.Height), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                GL.TexSubImage2D(TextureTarget.Texture2D, 0, x, y, bitmapData.Width, bitmapData.Height, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, bitmapData.Scan0);
+                GL.TexSubImage2D(TextureTarget.Texture2D, 0, x, y, bitmap.Width, bitmap.Height, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
                 GL.Finish();
-                b.UnlockBits(bitmapData);
             });
 
             DrawState.CheckError("updating texture");
@@ -74,18 +71,14 @@ namespace BrewLib.Graphics.Textures
 
         #endregion
 
-        public static Bitmap LoadBitmap(string filename, ResourceContainer resourceContainer = null)
+        public static SKBitmap LoadBitmap(string filename, ResourceContainer resourceContainer = null)
         {
-            try
+            if (File.Exists(filename))
             {
-                if (File.Exists(filename))
-                    return (Bitmap)Image.FromFile(filename, false);
-            }
-            catch (OutOfMemoryException)
-            {
-                // Dumb GDI+ shit
-                Trace.WriteLine($"Texture could not be loaded: {filename}");
-                return null;
+                var bitmap = BitmapLoader.Load(filename);
+                if (bitmap == null)
+                    Trace.WriteLine($"Texture could not be loaded: {filename}");
+                return bitmap;
             }
 
             if (resourceContainer == null) return null;
@@ -96,7 +89,7 @@ namespace BrewLib.Graphics.Textures
                     Trace.WriteLine($"Texture not found: {filename}");
                     return null;
                 }
-                return (Bitmap)Image.FromStream(stream, false);
+                return BitmapLoader.Decode(stream);
             }
         }
 
@@ -148,7 +141,7 @@ namespace BrewLib.Graphics.Textures
             return new Texture2d(textureId, width, height, description);
         }
 
-        public static Texture2d Load(Bitmap bitmap, string description, TextureOptions textureOptions = null)
+        public static Texture2d Load(SKBitmap bitmap, string description, TextureOptions textureOptions = null)
         {
             if (bitmap == null) throw new ArgumentNullException(nameof(bitmap));
 
@@ -163,14 +156,12 @@ namespace BrewLib.Graphics.Textures
             {
                 DrawState.BindTexture(textureId);
 
-                textureOptions.WithBitmap(bitmap, b =>
+                textureOptions.WithPixels(bitmap, textureWidth, textureHeight, pixels =>
                 {
-                    var bitmapData = b.LockBits(new Rectangle(0, 0, textureWidth, textureHeight), ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
-                    GL.TexImage2D(TextureTarget.Texture2D, 0, sRgb ? PixelInternalFormat.SrgbAlpha : PixelInternalFormat.Rgba, bitmapData.Width, bitmapData.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Bgra, PixelType.UnsignedByte, bitmapData.Scan0);
+                    GL.TexImage2D(TextureTarget.Texture2D, 0, sRgb ? PixelInternalFormat.SrgbAlpha : PixelInternalFormat.Rgba, textureWidth, textureHeight, 0, PixelFormat.Bgra, PixelType.UnsignedByte, pixels);
                     if (textureOptions.GenerateMipmaps)
                         GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
                     GL.Finish();
-                    b.UnlockBits(bitmapData);
                 });
 
                 DrawState.CheckError("specifying texture");

@@ -1,5 +1,6 @@
 ﻿using OpenTK;
 using OpenTK.Graphics;
+using SkiaSharp;
 using System;
 
 namespace BrewLib.Util
@@ -11,6 +12,9 @@ namespace BrewLib.Util
 
         public static int ToRgba(this Color4 color)
             => ((int)(color.A * 255) << 24) | ((int)(color.B * 255) << 16) | ((int)(color.G * 255) << 8) | (int)(color.R * 255);
+
+        public static SKColor ToSKColor(this Color4 color)
+            => new SKColor((uint)color.ToArgb());
 
         public static Color4 ToColor4(this int color)
             => new Color4(

@@ -1,7 +1,7 @@
-﻿using System;
+﻿using SkiaSharp;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 
 namespace BrewLib.Graphics.Textures
 {
@@ -29,7 +29,7 @@ namespace BrewLib.Graphics.Textures
         /// <summary>
         /// Adds a bitmap to the atlas and returns the new region
         /// </summary>
-        public Texture2dRegion AddRegion(Bitmap bitmap, string description)
+        public Texture2dRegion AddRegion(SKBitmap bitmap, string description)
         {
             if (bitmap.Width > width || bitmap.Height > height)
             {

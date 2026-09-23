@@ -1,6 +1,6 @@
-﻿using BrewLib.Util;
+﻿using BrewLib.Graphics.Text;
+using BrewLib.Util;
 using OpenTK.Graphics;
-using System.Drawing;
 
 namespace BrewLib.UserInterface.Skinning.Styles
 {

@@ -1,10 +1,9 @@
-﻿using Brewlib.Util;
-using BrewLib.Data;
+﻿using BrewLib.Data;
 using OpenTK.Graphics.OpenGL;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Drawing;
 using System.IO;
 using Tiny;
 using Tiny.Formats.Json;
@@ -39,14 +38,29 @@ namespace BrewLib.Graphics.Textures
             DrawState.CheckError("applying texture parameters");
         }
 
-        public void WithBitmap(Bitmap bitmap, Action<Bitmap> action)
+        /// <summary>
+        /// Calls the action with the pixels of the top left part of the bitmap,
+        /// as tightly packed BGRA that is premultiplied depending on these options.
+        /// </summary>
+        public void WithPixels(SKBitmap bitmap, int width, int height, Action<IntPtr> action)
         {
-            if (PreMultiply)
+            var alphaType = PreMultiply ? SKAlphaType.Premul : SKAlphaType.Unpremul;
+            if (bitmap.ColorType == SKColorType.Bgra8888 &&
+                (bitmap.AlphaType == alphaType || bitmap.AlphaType == SKAlphaType.Opaque) &&
+                bitmap.Width == width && bitmap.Height == height && bitmap.RowBytes == width * 4)
             {
-                using (var pinned = BitmapHelper.Premultiply(bitmap))
-                    action(pinned.Bitmap);
+                action(bitmap.GetPixels());
+                return;
             }
-            else action(bitmap);
+
+            var info = new SKImageInfo(width, height, SKColorType.Bgra8888, alphaType);
+            using (var converted = new SKBitmap(info))
+            using (var pixmap = bitmap.PeekPixels())
+            {
+                if (!pixmap.ReadPixels(info, converted.GetPixels(), converted.RowBytes, 0, 0))
+                    throw new InvalidOperationException($"Failed to convert a {bitmap.ColorType} {bitmap.AlphaType} bitmap");
+                action(converted.GetPixels());
+            }
         }
 
         public bool Equals(TextureOptions other)

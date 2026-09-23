@@ -1,6 +1,6 @@
 ﻿using OpenTK;
+using SkiaSharp;
 using System;
-using System.Drawing;
 
 namespace BrewLib.Graphics.Textures
 {
@@ -29,7 +29,7 @@ namespace BrewLib.Graphics.Textures
             this.description = description;
         }
 
-        public virtual void Update(Bitmap bitmap, int x, int y, TextureOptions textureOptions)
+        public virtual void Update(SKBitmap bitmap, int x, int y, TextureOptions textureOptions)
         {
             if (texture == null)
                 throw new InvalidOperationException();
