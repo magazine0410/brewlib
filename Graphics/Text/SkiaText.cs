@@ -36,7 +36,7 @@ namespace BrewLib.Graphics.Text
             foreach (var run in getRuns(font, text))
                 using (run)
                 {
-                    canvas.DrawText(run.Text, x, baseline, run.Font, paint);
+                    canvas.DrawText(run.Text, x, baseline, SKTextAlign.Left, run.Font, paint);
                     x += run.Font.MeasureText(run.Text);
                 }
         }

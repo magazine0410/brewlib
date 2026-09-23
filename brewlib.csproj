@@ -20,12 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="bass.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="bass_fx.dll">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="libbass.so" Condition="Exists('libbass.so')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
